@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   MoreVertical, X, Settings, Play, Download, Trash2, Edit2, 
   Folder, FolderOpen, Save, Merge, CheckSquare, Square,
-  Loader2
+  Loader2, RadioReceiver, DownloadCloud
 } from 'lucide-react';
 import { db, AudioItem, base64ToInt16Array, pcmToMp3Blob, downloadBlob, mergeBase64Audios } from './lib/audio';
 
@@ -26,6 +26,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
+
+  const [showIntro, setShowIntro] = useState(() => !localStorage.getItem('INTRO_SEEN'));
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const [text, setText] = useState('');
   const [scene, setScene] = useState('');
@@ -60,7 +63,15 @@ export default function App() {
   useEffect(() => {
     loadAudios();
     
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
     return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       // Any generic cleanup
     };
   }, []);
@@ -228,8 +239,72 @@ export default function App() {
     audio.play().catch(() => {});
   };
 
+  const installPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
+
+  const closeIntro = () => {
+    localStorage.setItem('INTRO_SEEN', 'true');
+    setShowIntro(false);
+  };
+
   return (
     <div className="flex h-[100dvh] w-full bg-[#0a0a0c] text-white font-sans overflow-hidden" onClick={() => setOpenDropdownId(null)}>
+      
+      {/* Intro Modal */}
+      <AnimatePresence>
+        {showIntro && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: -20 }}
+              transition={{ type: "spring", damping: 20 }}
+              className="bg-[#161618] border border-[#00f3ff]/20 rounded-3xl p-8 w-full max-w-lg shadow-[0_0_50px_rgba(0,243,255,0.1)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00f3ff] to-transparent opacity-50"></div>
+              
+              <div className="flex flex-col items-center text-center space-y-6">
+                <div className="w-16 h-16 bg-[#00f3ff]/10 rounded-2xl border border-[#00f3ff]/30 shadow-[0_0_30px_rgba(0,243,255,0.2)] flex items-center justify-center">
+                  <RadioReceiver size={32} className="text-[#00f3ff]" />
+                </div>
+                
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-bold tracking-tight">Mutu <span className="text-[#00f3ff]">Audio</span></h1>
+                  <p className="text-gray-400 text-sm max-w-[280px] mx-auto">
+                    Premium vocal synthesis platform powered by cutting-edge AI.
+                  </p>
+                </div>
+
+                <div className="w-full flex-1 flex flex-col gap-3 mt-4">
+                  <button 
+                    onClick={closeIntro}
+                    className="w-full py-4 rounded-xl bg-[#00f3ff] text-black font-bold text-sm tracking-wide shadow-[0_0_20px_rgba(0,243,255,0.3)] hover:shadow-[0_0_30px_rgba(0,243,255,0.5)] transition-all hover:bg-cyan-300"
+                  >
+                    ENTER STUDIO
+                  </button>
+                  {deferredPrompt && (
+                    <button 
+                      onClick={installPWA}
+                      className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-sm tracking-wide hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <DownloadCloud size={18} className="text-[#00f3ff]"/> INSTALL APP
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Overlay */}
       <AnimatePresence>
         {sidebarOpen && (
